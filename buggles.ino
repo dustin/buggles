@@ -6,15 +6,36 @@
 
 // http://focus.ti.com/docs/prod/folders/print/cc2500.html
 
-// Add a loss histogram to the SUMD output
-#define DEBUG
+// ----------------------------------------------------------------------
+// Config-ish stuff.
+// ----------------------------------------------------------------------
 
-// Sync SUMD output with radio input
+//
+// Add a loss histogram to the SUMD output
+//
+
+// #define DEBUG
+
+//
+// Sync SUMD output with radio input rather than using SUMD's normal
+// 100Hz output rate.  This veers slightly off spec since we'll be
+// outputting packets every 9ms instead of every 10ms, but I doubt any
+// FC will be unhappy with that.  The upside is that you'll get
+// packets delivered as soon as possible.
+//
+
 #define ONESHOT
 
-// Uncomment to use a dedicated GDO pin to signal incoming packets
+//
+// Uncomment to use a dedicated GDO pin to signal incoming packets.
+// This is highly dependent on the radio module you use.  The one I'm
+// using on my desk has no GDO_0 available, so I'm using GDO_1 (SCK).
+// Fewer pins, but not quite as fancy.
+//
+
 // #define USE_GDO_0
 
+//
 // Instead of writing out SUMD frames, print out summary of packet processing:
 //  . == packet received
 //  ! == packet expected, but not received
@@ -23,7 +44,13 @@
 //  T == invalid address
 //  N == invalid packet length
 //  X == CRC fail
-#define SER_PRINT_DEBUG
+//
+
+// #define SER_PRINT_DEBUG
+
+// ----------------------------------------------------------------------
+// End of config-ish stuff.
+// ----------------------------------------------------------------------
 
 #ifdef SER_PRINT_DEBUG
 #  define DPRINT(a) (Serial.print(a))
