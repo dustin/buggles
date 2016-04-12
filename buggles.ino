@@ -410,6 +410,37 @@ void sendTelemetry() {
     DPRINT("@");
 }
 
+bool getPacket() {
+    bool packet = false;
+    if (DATA_PRESENT) {
+        uint8_t ccLen = cc2500_readReg(CC2500_RXBYTES | CC2500_READ_BURST) & 0x7F;
+        if (ccLen > 20)
+            ccLen = 20;//
+        if (ccLen) {
+            cc2500_readFifo((uint8_t *)ccData, ccLen);
+            if (ccData[ccLen - 1] & 0x80) { // Validate cc2500 CRC
+                updateRSSI(ccData[ccLen - 2]);
+                missingPackets = 0;
+                if (ccData[0] == 0x11) { // Correct length
+                    if (ccData[2] == txid[1]) { // second half of TX id
+                        nextChannel(1);
+                        packet = true;
+                        TCNT2 = T2_9MS;
+                        cc2500_strobe(CC2500_SIDLE);
+                    } else {
+                        DPRINT("T");
+                    }
+                } else {
+                    DPRINT("N");
+                }
+            } else {
+                DPRINT("X");
+            }
+        }
+    }
+    return packet;
+}
+
 void loop() {
     bool packet = false;
     static uint8_t seq = 0;
@@ -417,7 +448,7 @@ void loop() {
 
     cc2500_strobe(CC2500_SRX);
     CS_cc2500_on;
-    while (1) {
+    while (!packet) {
         if (timedout) {
             timedout = false;
             txReady();
@@ -447,33 +478,7 @@ void loop() {
             transmitPacket();
         }
 
-        if (DATA_PRESENT) {
-            uint8_t ccLen = cc2500_readReg(CC2500_RXBYTES | CC2500_READ_BURST) & 0x7F;
-            if (ccLen > 20)
-                ccLen = 20;//
-            if (ccLen) {
-                cc2500_readFifo((uint8_t *)ccData, ccLen);
-                if (ccData[ccLen - 1] & 0x80) { // Only if correct CRC
-                    updateRSSI(ccData[ccLen - 2]);
-                    missingPackets = 0;
-                    if (ccData[0] == 0x11) { // Correct length
-                        if (ccData[2] == txid[1]) { // second half of TX id
-                            nextChannel(1);
-                            packet = true;
-                            TCNT2 = T2_9MS;
-                            cc2500_strobe(CC2500_SIDLE);
-                            break;
-                        } else {
-                            DPRINT("T");
-                        }
-                    } else {
-                        DPRINT("N");
-                    }
-                } else {
-                    DPRINT("X");
-                }
-            }
-        }
+        packet = getPacket();
     }
     CS_cc2500_off;
 
