@@ -1,4 +1,5 @@
 #ifndef CONFIG_H
+#define CONIFG_H 1
 
 // ----------------------------------------------------------------------
 // Config-ish stuff.
@@ -50,6 +51,7 @@
     defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
 # define TINY
 # define TIMER TCNT0
+# include <SoftwareSerial.h>
 #else
 # define TIMER TCNT2
 #endif
@@ -63,4 +65,3 @@
 #endif
 
 #endif /* CONFIG_H */
-

@@ -44,7 +44,8 @@
 #  define CS_cc2500_on   (PORTB |= PIN4)
 #  define CS_cc2500_off  (PORTB |= NPIN4)
 #  define DATA_PRESENT   ((PINB & PIN3) == PIN3)
-#else
+SoftwareSerial Serial(0, 3);
+#else /* not TINY */
 #  define GDO_pin 3
 #  define CS 2
 #  define CS_cc2500_on  (PORTD  |= PIN2)
@@ -107,9 +108,7 @@ void setup() {
 }
 
 void initSerial() {
-#ifndef TINY
     Serial.begin(115200);
-#endif
 }
 
 volatile bool tx_sumd = false;
@@ -514,9 +513,7 @@ void transmitPacket() {
         sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
     }
     #ifndef SER_PRINT_DEBUG
-    #ifndef TINY // TODO:  Need to transmit something from attiny
     Serial.write(sumd.bytes(), sumd.size());
-    #endif /* TINY */
     #endif /* SER_PRINT_DEBUG */
     tx_sumd = false;
 }
