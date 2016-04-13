@@ -1,56 +1,17 @@
 #include <EEPROM.h>
-#include <SPI.h>
 #include <avr/interrupt.h>
+#include "config.h"
 #include "SUMD.h"
 #include "cc2500.h"
 
+#ifdef TINY
+#include "tinyspi.h"
+#else
+#include <SPI.h>
+#endif /* TINY */
+
 // http://focus.ti.com/docs/prod/folders/print/cc2500.html
 
-// ----------------------------------------------------------------------
-// Config-ish stuff.
-// ----------------------------------------------------------------------
-
-//
-// Add a loss histogram to the SUMD output
-//
-
-// #define DEBUG
-
-//
-// Sync SUMD output with radio input rather than using SUMD's normal
-// 100Hz output rate.  This veers slightly off spec since we'll be
-// outputting packets every 9ms instead of every 10ms, but I doubt any
-// FC will be unhappy with that.  The upside is that you'll get
-// packets delivered as soon as possible.
-//
-
-#define ONESHOT
-
-//
-// Uncomment to use a dedicated GDO pin to signal incoming packets.
-// This is highly dependent on the radio module you use.  The one I'm
-// using on my desk has no GDO_0 available, so I'm using GDO_1 (SCK).
-// Fewer pins, but not quite as fancy.
-//
-
-// #define USE_GDO_0
-
-//
-// Instead of writing out SUMD frames, print out summary of packet processing:
-//  . == packet received
-//  ! == packet expected, but not received
-//  + == channel changed
-//  @ == telemetry transmitted
-//  T == invalid address
-//  N == invalid packet length
-//  X == CRC fail
-//
-
-// #define SER_PRINT_DEBUG
-
-// ----------------------------------------------------------------------
-// End of config-ish stuff.
-// ----------------------------------------------------------------------
 
 #ifdef SER_PRINT_DEBUG
 #  define DPRINT(a) (Serial.print(a))
@@ -77,19 +38,26 @@
 #define NPIN5 0xdf
 #define NPIN6 0xbf
 
-#define CS 2
-#define GDO_pin 3
-
-#define CS_cc2500_on  (PORTD  |= PIN2)
-#define CS_cc2500_off (PORTD &= NPIN2)
-
-#ifdef USE_GDO_0
-// Detect data on dedicated pin
-#define DATA_PRESENT ((PIND & PIN3) == PIN3)
+#ifdef TINY
+#  define GDO_pin 2
+#  define CS 4
+#  define CS_cc2500_on   (PORTB |= PIN4)
+#  define CS_cc2500_off  (PORTB |= NPIN4)
+#  define DATA_PRESENT   ((PINB & PIN3) == PIN3)
 #else
-// Detect data on SCK
-#define DATA_PRESENT ((PINB & PIN4) == PIN4)
+#  define GDO_pin 3
+#  define CS 2
+#  define CS_cc2500_on  (PORTD  |= PIN2)
+#  define CS_cc2500_off (PORTD  &= NPIN2)
+#  ifdef USE_GDO_0
+     // Detect data on dedicated pin
+#    define DATA_PRESENT ((PIND & PIN3) == PIN3)
+#  else
+     // Detect data on SCK
+#    define DATA_PRESENT ((PINB & PIN4) == PIN4)
+#  endif
 #endif
+
 
 const int rssi_offset = 71;
 const int rssi_min = -90;
@@ -123,7 +91,7 @@ SUMD sumd(SUMD_RSSI_CHAN + 1 + MORE_CHAN);
 void setup() {
     SPI.begin();
 
-    Serial.begin(115200);
+    initSerial();
 
     for (int i = 0; i < NUM_BUCKETS; i++) {
         loss_histo[i] = 0;
@@ -138,11 +106,18 @@ void setup() {
     initTimeoutTimer();
 }
 
+void initSerial() {
+#ifndef TINY
+    Serial.begin(115200);
+#endif
+}
+
 volatile bool tx_sumd = false;
 volatile bool timedout = false;
 
 // Set tx_sumd = true every 10ms
 void initSUMDTimer() {
+#ifndef TINY
     cli();
     TCCR1A = 0;
     TCCR1B = 0;
@@ -153,19 +128,26 @@ void initSUMDTimer() {
     TCCR1B |= (1 << CS11) | (1 << CS10);  // 64 prescaler
     TIMSK1 |= (1 << OCIE1A);              // enable timer compare interrupt
     sei();
+#endif /* TINY */
 }
 
-#define T2_9MS (255-141)
+#define T2_9MS (255-CPU_SCALE(70))
 
 // Set timeout = true every 9ms
 void initTimeoutTimer() {
     cli();
-    TCCR2A = 0;
-    TCCR2B = 0;
-    TCNT2  = T2_9MS; // about 9ms to go
-
+#ifdef TINY
+    TCCR0A = 0;
+    TCCR0B |= (1 << CS02) | (1 << CS00);  // 1024 prescaler
+    TIMSK |= (1 << TOIE0);              // enable timer overflow interrupt
+#else
+    TCCR1A = 0;
+    TCCR1B = 0;
     TCCR2B |= (1 << CS22) | (1 << CS21)  | (1 << CS20);  // 1024 prescaler
     TIMSK2 |= (1 << TOIE2);              // enable timer overflow interrupt
+#endif
+
+    TIMER  = T2_9MS; // about 9ms to go
     sei();
 }
 
@@ -176,12 +158,17 @@ ISR(TIMER1_COMPA_vect) {
 void txReady() {
 #ifdef ONESHOT
     tx_sumd = true;
+    #ifndef TINY
     TCNT1 = 0;
+    #endif
 #endif
 }
 
 ISR(TIMER2_OVF_vect) {
     timedout = true;
+#ifdef TINY
+    tx_sumd = true;
+#endif
 }
 
 void initRadio() {
@@ -389,7 +376,7 @@ void nextChannel(uint8_t skip) {
     if (chan >= numChans) chan -= numChans;
     cc2500_writeReg(CC2500_CHANNR, hopData[chan]);
     cc2500_writeReg(CC2500_FSCAL3, 0x89);
-    TCNT2 = T2_9MS;
+    TIMER = T2_9MS;
     DPRINT("+");
 }
 
@@ -425,7 +412,7 @@ bool getPacket() {
                     if (ccData[2] == txid[1]) { // second half of TX id
                         nextChannel(1);
                         packet = true;
-                        TCNT2 = T2_9MS;
+                        TIMER = T2_9MS;
                         cc2500_strobe(CC2500_SIDLE);
                     } else {
                         DPRINT("T");
@@ -527,7 +514,9 @@ void transmitPacket() {
         sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
     }
     #ifndef SER_PRINT_DEBUG
+    #ifndef TINY // TODO:  Need to transmit something from attiny
     Serial.write(sumd.bytes(), sumd.size());
-    #endif
+    #endif /* TINY */
+    #endif /* SER_PRINT_DEBUG */
     tx_sumd = false;
 }
