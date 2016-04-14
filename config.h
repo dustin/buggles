@@ -40,10 +40,9 @@
 #if defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__) || \
     defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
 # define TINY
-# define TIMER TCNT0
-#else
-# define TIMER TCNT1
 #endif
+
+#define TIMER TCNT0
 
 #if F_CPU == 16000000
 #  define CPU_SCALE(a) (a)

@@ -111,14 +111,14 @@ void initTimeoutTimer() {
     cli();
 #ifdef TINY
     TCCR0A = 0;
-    TCCR0B |= (1 << CS02) | (1 << CS00);  // 1024 prescaler
-    TIMSK |= (1 << TOIE0);              // enable timer overflow interrupt
+    TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
+    TIMSK |= _BV(TOIE0);              // enable timer overflow interrupt
 #else
-    OCR1A = CPU_SCALE(141);               // compare match register 16MHz/1024/9ms
-    OCR1B = 0;
-    TCCR1B |= (1 << WGM12);               // CTC mode
-    TCCR1B |= (1 << CS12) | (1 << CS10);  // 1024 prescaler
-    TIMSK1 |= (1 << OCIE1A);              // enable timer compare interrupt
+    OCR0A = CPU_SCALE(141);               // compare match register 16MHz/1024/9ms
+    OCR0B = 0;
+    TCCR0B |= _BV(WGM02);               // CTC mode
+    TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
+    TIMSK0 |= _BV(OCIE1A);              // enable timer compare interrupt
     TIMER = 0;
 #endif
 
@@ -136,7 +136,7 @@ ISR(WDT_vect) {
     failsafe = true;
 }
 
-ISR(TIMER1_COMPA_vect) {
+ISR(TIMER0_COMPA_vect) {
     timedout = true;
     tx_sumd = true;
 }
