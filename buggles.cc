@@ -404,6 +404,9 @@ void loop() {
         if (timedout) {
             timedout = false;
             cc2500_strobe(CC2500_SIDLE);
+            if (failsafe) {
+                DPRINT('F');
+            }
             if (missingPackets > MAX_MISSING_PKT) {
                 if (seeking == 0) {
                     nextChannel(SEEK_CHANSKIP);

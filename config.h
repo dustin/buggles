@@ -23,6 +23,7 @@
 // Instead of writing out SUMD frames, print out summary of packet processing:
 //  . == packet received
 //  ! == packet expected, but not received
+//  F == Failsafe (too long since good packet)
 //  + == channel changed
 //  @ == telemetry transmitted
 //  T == invalid address
