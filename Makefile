@@ -11,12 +11,19 @@ CFLAGS=$(COMMON_FLAGS) --std=c99
 CXXFLAGS=$(COMMON_FLAGS) --std=c++03
 ASFLAGS=$(COMMON_FLAGS)
 
+attiny85_OBJS=BasicSerial3.o
+OBJS=buggles.o cc2500.o tinyspi.o serial.o $($(MCU)_OBJS)
+
+ifeq ($MCU, attiny85)
+	OBJS+=BasicSerial3.o
+endif
+
 buggles.hex: buggles.elf
 	${OBJCOPY} -O ihex -R .eeprom buggles.elf buggles.hex
 	$(SIZE) --format=avr --mcu=$(MCU) buggles.elf
 
-buggles.elf: buggles.o cc2500.o tinyspi.o serial.o BasicSerial3.o
-	${CXX} $(CXXFLAGS) -o buggles.elf buggles.o cc2500.o tinyspi.o serial.o BasicSerial3.o
+buggles.elf: $(OBJS)
+	${CXX} $(CXXFLAGS) -o $@ $(OBJS)
 
 buggles.o: config.h cc2500.h sumd.h tinyspi.h serial.h
 
