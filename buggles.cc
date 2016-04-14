@@ -56,34 +56,8 @@ int loss_histo[NUM_BUCKETS];
 #define SUMD_RSSI_CHAN NUM_CHAN
 SUMD sumd(SUMD_RSSI_CHAN + 1 + MORE_CHAN);
 
-void initSerial();
-void initRadio();
-void initTimeoutTimer();
-void configureRadio();
-void bindRadio();
-void storeBind();
-void transmitPacket();
-void tuning();
 void ser_write(const uint8_t v);
 void ser_write_block(const uint8_t *v, size_t len);
-
-void setup() {
-    SPI.begin();
-
-    initSerial();
-    ser_write('#');
-
-    for (int i = 0; i < NUM_BUCKETS; i++) {
-        loss_histo[i] = 0;
-    }
-    for (int i = 0; i < sumd.nchan(); i++) {
-        sumd.setChannel(i, 1500);
-    }
-
-    initRadio();
-
-    initTimeoutTimer();
-}
 
 void initSerial() {
     DDRD |= _BV(PD1);
@@ -139,22 +113,6 @@ ISR(WDT_vect) {
 ISR(TIMER0_COMPA_vect) {
     timedout = true;
     tx_sumd = true;
-}
-
-void initRadio() {
-    SET_CS;
-    SET_GDO;
-
-    CS_cc2500_on;
-
-    configureRadio();
-    bindRadio();
-    cc2500_writeReg(CC2500_ADDR, txid[0]);
-    cc2500_writeReg(CC2500_FSCTRL0, freq_offset);
-
-    cc2500_writeReg(CC2500_CHANNR, hopData[0]);//0A-hop
-    cc2500_writeReg(CC2500_FSCAL3, 0x89); //23-89
-    cc2500_strobe(CC2500_SRX);
 }
 
 void  configureRadio() {
@@ -218,6 +176,14 @@ uint8_t waitFor(uint8_t *data) {
     }
 }
 
+void storeBind() {
+    uint8_t *addr = eeprom_addr;
+    eeprom_write_block(txid, addr, sizeof(txid));
+
+    eeprom_write_block(hopData, addr+10, sizeof(hopData));
+    eeprom_write_byte(addr + 100, numChans);
+}
+
 void getBind() {
     cc2500_strobe(CC2500_SRX);//enter in rx mode
     numChans = 0;
@@ -257,14 +223,6 @@ void getBind() {
     cc2500_strobe(CC2500_SIDLE);
 }
 
-void storeBind() {
-    uint8_t *addr = eeprom_addr;
-    eeprom_write_block(txid, addr, sizeof(txid));
-
-    eeprom_write_block(hopData, addr+10, sizeof(hopData));
-    eeprom_write_byte(addr + 100, numChans);
-}
-
 unsigned char bindJumper(void) {
     DDRC &= ~(_BV(PIN0));
     PORTC |= _BV(PIN0);
@@ -273,30 +231,6 @@ unsigned char bindJumper(void) {
         return 1;
     }
     return  0;
-}
-
-void bindRadio() {
-    bool binding = bindJumper();
-    while (1) {
-        if (!binding) { //bind complete or no bind
-            uint8_t *addr = eeprom_addr;
-            eeprom_read_block(txid, addr, sizeof(txid));
-            if (txid[0] == 0xff && txid[1] == 0xff) {
-                // No valid txid, forcing bind
-                binding = true;
-                continue;
-            }
-            eeprom_read_block(hopData, addr+10, sizeof(hopData));
-            numChans = eeprom_read_byte(addr + 100);
-            freq_offset = eeprom_read_byte(addr + 101);
-            break;
-        } else {
-            tuning();
-            eeprom_write_byte(eeprom_addr + 101, freq_offset);
-            getBind();
-            return;
-        }
-    }
 }
 
 void tuning() {
@@ -320,6 +254,30 @@ void tuning() {
                     break;
                 }
             }
+        }
+    }
+}
+
+void bindRadio() {
+    bool binding = bindJumper();
+    while (1) {
+        if (!binding) { //bind complete or no bind
+            uint8_t *addr = eeprom_addr;
+            eeprom_read_block(txid, addr, sizeof(txid));
+            if (txid[0] == 0xff && txid[1] == 0xff) {
+                // No valid txid, forcing bind
+                binding = true;
+                continue;
+            }
+            eeprom_read_block(hopData, addr+10, sizeof(hopData));
+            numChans = eeprom_read_byte(addr + 100);
+            freq_offset = eeprom_read_byte(addr + 101);
+            break;
+        } else {
+            tuning();
+            eeprom_write_byte(eeprom_addr + 101, freq_offset);
+            getBind();
+            return;
         }
     }
 }
@@ -392,11 +350,32 @@ bool getPacket() {
     return packet;
 }
 
-uint8_t seeking = 0;
+static inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+void transmitPacket() {
+    sumd.setChannel(SUMD_RSSI_CHAN, map(rssi, rssi_min, rssi_max, 1000, 2000));
+
+    // zero out any histo that exceeds 1000 packets, making the output
+    // calculation much more simple.
+    for (int i = 0; i < MORE_CHAN; i++) {
+        if (loss_histo[i] > 1000) {
+            loss_histo[i] = 0;
+        }
+        sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
+    }
+    #ifndef SER_PRINT_DEBUG
+    ser_write_block(sumd.bytes(), sumd.size());
+    #endif /* SER_PRINT_DEBUG */
+    tx_sumd = false;
+}
+
 void loop() {
     bool packet = false;
     static uint8_t seq = 0;
     static bool skipNext = false;
+    static uint8_t seeking = 0;
 
     cc2500_strobe(CC2500_SRX);
     CS_cc2500_on;
@@ -479,27 +458,6 @@ void loop() {
     }
 }
 
-static inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-void transmitPacket() {
-    sumd.setChannel(SUMD_RSSI_CHAN, map(rssi, rssi_min, rssi_max, 1000, 2000));
-
-    // zero out any histo that exceeds 1000 packets, making the output
-    // calculation much more simple.
-    for (int i = 0; i < MORE_CHAN; i++) {
-        if (loss_histo[i] > 1000) {
-            loss_histo[i] = 0;
-        }
-        sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
-    }
-    #ifndef SER_PRINT_DEBUG
-    ser_write_block(sumd.bytes(), sumd.size());
-    #endif /* SER_PRINT_DEBUG */
-    tx_sumd = false;
-}
-
 void ser_write(const uint8_t v) {
     loop_until_bit_is_set(UCSR0A, UDRE0);
     UDR0 = v;
@@ -509,8 +467,39 @@ void ser_write_block(const uint8_t *v, size_t len) {
     while(len--) ser_write(*v++);
 }
 
+void initRadio() {
+    SET_CS;
+    SET_GDO;
+
+    CS_cc2500_on;
+
+    configureRadio();
+    bindRadio();
+    cc2500_writeReg(CC2500_ADDR, txid[0]);
+    cc2500_writeReg(CC2500_FSCTRL0, freq_offset);
+
+    cc2500_writeReg(CC2500_CHANNR, hopData[0]);//0A-hop
+    cc2500_writeReg(CC2500_FSCAL3, 0x89); //23-89
+    cc2500_strobe(CC2500_SRX);
+}
+
 int main() {
-    setup();
+    SPI.begin();
+
+    initSerial();
+    ser_write('#');
+
+    for (int i = 0; i < NUM_BUCKETS; i++) {
+        loss_histo[i] = 0;
+    }
+    for (int i = 0; i < sumd.nchan(); i++) {
+        sumd.setChannel(i, 1500);
+    }
+
+    initRadio();
+
+    initTimeoutTimer();
+
     for(;;) {
         loop();
     }
