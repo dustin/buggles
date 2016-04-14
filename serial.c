@@ -1,9 +1,16 @@
 #include <avr/io.h>
 #include "config.h"
+
+#ifdef TINY
+#include "BasicSerial3.h"
+#else
 #include <util/setbaud.h>
+#endif
 
 void initSerial() {
-#ifndef TINY // TODO:  Add functional serial for TINY
+#ifdef TINY
+    // No init necessary since the lib jiggles it
+#else
     DDRD |= _BV(PD1);
 	DDRD &= ~_BV(PD0);
 
@@ -22,7 +29,9 @@ void initSerial() {
 }
 
 void ser_write(const uint8_t v) {
-#ifndef TINY // TODO:  Add functional serial for TINY
+#ifdef TINY
+    TxByte(v);
+#else
     loop_until_bit_is_set(UCSR0A, UDRE0);
     UDR0 = v;
 #endif

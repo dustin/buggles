@@ -9,20 +9,21 @@ SIZE=$(p)avr-size
 COMMON_FLAGS=-Os -DF_CPU=16000000UL -mmcu=$(MCU)
 CFLAGS=$(COMMON_FLAGS) --std=c99
 CXXFLAGS=$(COMMON_FLAGS) --std=c++03
+ASFLAGS=$(COMMON_FLAGS)
 
 buggles.hex: buggles.elf
 	${OBJCOPY} -O ihex -R .eeprom buggles.elf buggles.hex
 	$(SIZE) --format=avr --mcu=$(MCU) buggles.elf
 
-buggles.elf: buggles.o cc2500.o tinyspi.o serial.o
-	${CXX} $(CXXFLAGS) -o buggles.elf buggles.o cc2500.o tinyspi.o serial.o
+buggles.elf: buggles.o cc2500.o tinyspi.o serial.o BasicSerial3.o
+	${CXX} $(CXXFLAGS) -o buggles.elf buggles.o cc2500.o tinyspi.o serial.o BasicSerial3.o
 
 buggles.o: config.h cc2500.h sumd.h tinyspi.h serial.h
 
-serial.o: config.h serial.h serial.c
+serial.o: config.h serial.h serial.c BasicSerial3.h
 
 clean:
-	rm buggles.{elf,hex,o} cc2500.o tinyspi.o serial.o
+	rm buggles.{elf,hex} *.o
 
 install: buggles.hex
 	# avrdude -F -V -c usbtiny -p m328p -U flash:w:buggles.hex
