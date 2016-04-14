@@ -11,16 +11,6 @@
 // #define DEBUG
 
 //
-// Sync SUMD output with radio input rather than using SUMD's normal
-// 100Hz output rate.  This veers slightly off spec since we'll be
-// outputting packets every 9ms instead of every 10ms, but I doubt any
-// FC will be unhappy with that.  The upside is that you'll get
-// packets delivered as soon as possible.
-//
-
-#define ONESHOT
-
-//
 // Uncomment to use a dedicated GDO pin to signal incoming packets.
 // This is highly dependent on the radio module you use.  The one I'm
 // using on my desk has no GDO_0 available, so I'm using GDO_1 (SCK).
@@ -51,16 +41,40 @@
 # define TINY
 # define TIMER TCNT0
 #else
-# define TIMER TCNT2
+# define TIMER TCNT1
 #endif
 
 #if F_CPU == 16000000
 #  define CPU_SCALE(a) (a)
 #elif F_CPU == 8000000
+#  error wtf
 #  define CPU_SCALE(a) (a * 2)
 #else
 #  error // 8 or 16MHz only !
 #endif
 
-#endif /* CONFIG_H */
+#ifdef TINY
+#  define SET_GDO (DDRB &= ~(_BV(PIN3)))
+#  define CS 4
+#  define SET_CS (DDRB |= _BV(PIN4))
+#  define CS_cc2500_on   (PORTB |= _BV(PIN4))
+#  define CS_cc2500_off  (PORTB &= ~(_BV(PIN4)))
+#  define DATA_PRESENT   ((PINB & _BV(PIN3)) == _BV(PIN3))
+#else
+#  define SET_GDO (DDRD &= ~(_BV(PIN4)))
+#  define CS 2
+#  define SET_CS (DDRD |= _BV(PIN2))
+#  define CS_cc2500_on  (PORTD  |= _BV(PIN2))
+#  define CS_cc2500_off (PORTD  &= ~(_BV(PIN2)))
+#  ifdef USE_GDO_0
+     // Detect data on dedicated pin
+#    define DATA_PRESENT ((PIND & _BV(PIN3)) == _BV(PIN3))
+#  else
+     // Detect data on SCK
+#    define DATA_PRESENT ((PINB & _BV(PIN4)) == _BV(PIN4))
+#  endif
+#endif
 
+#define BAUD 115200
+
+#endif /* CONFIG_H */

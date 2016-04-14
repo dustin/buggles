@@ -1,23 +1,17 @@
+#include "config.h"
+
+#include <avr/io.h>
 #include <util/delay.h>
-#ifdef TINY
-#  include "tinyspi.h"
-#else
-#  include <SPI.h>
-#endif
+
+#include "cc2500.h"
+#include "tinyspi.h"
 
 static void begin() {
     CS_cc2500_off;
-#ifndef TINY
-    while(digitalRead(MISO) == HIGH);
-    SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
-#endif
 }
 
 static void end() {
     CS_cc2500_on;
-#ifndef TINY
-    SPI.endTransaction();
-#endif
 }
 
 void cc2500_readFifo(uint8_t *data, int len)

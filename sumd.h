@@ -6,13 +6,15 @@
 #define SUMD_FAILSAFE 0x81
 #define CRC_POLYNOME 0x1021
 
+#include <stdlib.h>
+
 class SUMD {
 public:
 
     // Construct a SUMD object managing the given number of channels.
     SUMD(const uint8_t nchans) {
         // [magic], [hdr], [nchan], [2 bytes * channels], [2 byte crc]
-        data = new byte[(nchans*2)+5];
+        data = (uint8_t*)malloc((nchans*2)+5);
         data[0] = 0xa8;
         data[2] = nchans;
 
@@ -38,7 +40,7 @@ public:
     }
 
     // Set the header to either SUMD_VALID or SUMD_FAILSAFE.
-    void setHeader(const byte b) {
+    void setHeader(const uint8_t b) {
         data[1] = b;
 
         headercrc = CRC16(0, data[0]);
@@ -52,7 +54,7 @@ public:
     }
 
     // The address of the buffer to transmit as a SUMD packet.
-    const byte* bytes() {
+    const uint8_t* bytes() {
         computeCRC();
         return data;
     }
@@ -63,7 +65,7 @@ public:
     }
 
 private:
-    byte *data;
+    uint8_t *data;
 
     uint16_t headercrc;
 

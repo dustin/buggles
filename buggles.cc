@@ -1,63 +1,29 @@
-#include <EEPROM.h>
+#include <avr/io.h>
+#include <avr/eeprom.h>
 #include <avr/interrupt.h>
+#include <avr/wdt.h>
+#include <util/delay.h>
 #include "config.h"
+#include <util/setbaud.h>
 #include "SUMD.h"
 #include "cc2500.h"
 
-#ifdef TINY
 #include "tinyspi.h"
-#else
-#include <SPI.h>
-#endif /* TINY */
 
 // http://focus.ti.com/docs/prod/folders/print/cc2500.html
 
 
 #ifdef SER_PRINT_DEBUG
-#  define DPRINT(a) (Serial.print(a))
+#  define DPRINT(a) (ser_write(a))
 #else
 #  define DPRINT(a)
 #endif
 
-#define FAILSAFE_TIME_MS 1500
 #define MAX_MISSING_PKT 20
 #define SEEK_CHANSKIP   13
 
 // Microseconds between sumd frames
 #define SUMD_FREQ 10000
-
-#define PIN2 0x04
-#define PIN3 0x08
-#define PIN4 0x10
-#define PIN5 0x20
-#define PIN6 0x40
-
-#define NPIN2 0xfb
-#define NPIN3 0xf7
-#define NPIN4 0xef
-#define NPIN5 0xdf
-#define NPIN6 0xbf
-
-#ifdef TINY
-#  define GDO_pin 2
-#  define CS 4
-#  define CS_cc2500_on   (PORTB |= PIN4)
-#  define CS_cc2500_off  (PORTB |= NPIN4)
-#  define DATA_PRESENT   ((PINB & PIN3) == PIN3)
-#else
-#  define GDO_pin 3
-#  define CS 2
-#  define CS_cc2500_on  (PORTD  |= PIN2)
-#  define CS_cc2500_off (PORTD  &= NPIN2)
-#  ifdef USE_GDO_0
-     // Detect data on dedicated pin
-#    define DATA_PRESENT ((PIND & PIN3) == PIN3)
-#  else
-     // Detect data on SCK
-#    define DATA_PRESENT ((PINB & PIN4) == PIN4)
-#  endif
-#endif
-
 
 const int rssi_offset = 71;
 const int rssi_min = -90;
@@ -65,7 +31,9 @@ const int rssi_max = -20;
 
 #define MAX_CHANS 60
 
-const uint8_t eeprom_addr(100);
+uint8_t *eeprom_addr((uint8_t*)100);
+
+typedef uint8_t byte;
 
 byte txid[2];
 int freq_offset;
@@ -88,10 +56,22 @@ int loss_histo[NUM_BUCKETS];
 #define SUMD_RSSI_CHAN NUM_CHAN
 SUMD sumd(SUMD_RSSI_CHAN + 1 + MORE_CHAN);
 
+void initSerial();
+void initRadio();
+void initTimeoutTimer();
+void configureRadio();
+void bindRadio();
+void storeBind();
+void transmitPacket();
+void tuning();
+void ser_write(const uint8_t v);
+void ser_write_block(const uint8_t *v, size_t len);
+
 void setup() {
     SPI.begin();
 
     initSerial();
+    ser_write('#');
 
     for (int i = 0; i < NUM_BUCKETS; i++) {
         loss_histo[i] = 0;
@@ -102,36 +82,29 @@ void setup() {
 
     initRadio();
 
-    initSUMDTimer();
     initTimeoutTimer();
 }
 
 void initSerial() {
-#ifndef TINY
-    Serial.begin(115200);
+    DDRD |= _BV(PD1);
+	DDRD &= ~_BV(PD0);
+
+    UBRR0H = UBRRH_VALUE;
+    UBRR0L = UBRRL_VALUE;
+
+#if USE_2X
+    UCSR0A |= _BV(U2X0);
+#else
+    UCSR0A &= ~(_BV(U2X0));
 #endif
+
+    UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */
+    UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */
 }
 
 volatile bool tx_sumd = false;
+volatile bool failsafe = false;
 volatile bool timedout = false;
-
-// Set tx_sumd = true every 10ms
-void initSUMDTimer() {
-#ifndef TINY
-    cli();
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCNT1  = 0;
-
-    OCR1A = 2500;                         // compare match register 16MHz/64/10Hz
-    TCCR1B |= (1 << WGM12);               // CTC mode
-    TCCR1B |= (1 << CS11) | (1 << CS10);  // 64 prescaler
-    TIMSK1 |= (1 << OCIE1A);              // enable timer compare interrupt
-    sei();
-#endif /* TINY */
-}
-
-#define T2_9MS (255-CPU_SCALE(70))
 
 // Set timeout = true every 9ms
 void initTimeoutTimer() {
@@ -141,39 +114,36 @@ void initTimeoutTimer() {
     TCCR0B |= (1 << CS02) | (1 << CS00);  // 1024 prescaler
     TIMSK |= (1 << TOIE0);              // enable timer overflow interrupt
 #else
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCCR2B |= (1 << CS22) | (1 << CS21)  | (1 << CS20);  // 1024 prescaler
-    TIMSK2 |= (1 << TOIE2);              // enable timer overflow interrupt
+    OCR1A = CPU_SCALE(141);               // compare match register 16MHz/1024/9ms
+    OCR1B = 0;
+    TCCR1B |= (1 << WGM12);               // CTC mode
+    TCCR1B |= (1 << CS12) | (1 << CS10);  // 1024 prescaler
+    TIMSK1 |= (1 << OCIE1A);              // enable timer compare interrupt
+    TIMER = 0;
 #endif
 
-    TIMER  = T2_9MS; // about 9ms to go
+    // The watchdog timer is used for detecting failsafe state.
+    wdt_reset();
+    WDTCSR = _BV(WDCE) | _BV(WDE);
+    // Enable WDT Interrupt, and Set Timeout to ~1 seconds,
+	WDTCSR = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+
     sei();
 }
 
+ISR(WDT_vect) {
+    wdt_reset();
+    failsafe = true;
+}
+
 ISR(TIMER1_COMPA_vect) {
-    tx_sumd = true;
-}
-
-void txReady() {
-#ifdef ONESHOT
-    tx_sumd = true;
-    #ifndef TINY
-    TCNT1 = 0;
-    #endif
-#endif
-}
-
-ISR(TIMER2_OVF_vect) {
     timedout = true;
-#ifdef TINY
     tx_sumd = true;
-#endif
 }
 
 void initRadio() {
-    pinMode(CS, OUTPUT);        //CS output
-    pinMode(GDO_pin, INPUT);    //GDO0 pin
+    SET_CS;
+    SET_GDO;
 
     CS_cc2500_on;
 
@@ -287,22 +257,19 @@ void getBind() {
     cc2500_strobe(CC2500_SIDLE);
 }
 
-void storeBind()
-{
-    uint8_t addr = eeprom_addr;
-    EEPROM.write(addr, txid[0]);
-    EEPROM.write(addr+1, txid[1]);
+void storeBind() {
+    uint8_t *addr = eeprom_addr;
+    eeprom_write_block(txid, addr, sizeof(txid));
 
-    for (int i = 0; i < sizeof(hopData); i++) {
-        EEPROM.write(addr + 10 + i, hopData[i]);
-    }
-    EEPROM.write(addr + 100, numChans);
+    eeprom_write_block(hopData, addr+10, sizeof(hopData));
+    eeprom_write_byte(addr + 100, numChans);
 }
 
 unsigned char bindJumper(void) {
-    pinMode(A0, INPUT_PULLUP);
-    if ( digitalRead(A0) == LOW) {
-        delayMicroseconds(1);
+    DDRC &= ~(_BV(PIN0));
+    PORTC |= _BV(PIN0);
+    if (PINC & _BV(PIN0) == 0) {
+        _delay_us(1);
         return 1;
     }
     return  0;
@@ -312,24 +279,20 @@ void bindRadio() {
     bool binding = bindJumper();
     while (1) {
         if (!binding) { //bind complete or no bind
-            uint8_t addr = eeprom_addr;
-            txid[0] = EEPROM.read(addr);
-            txid[1] = EEPROM.read(addr+1);
+            uint8_t *addr = eeprom_addr;
+            eeprom_read_block(txid, addr, sizeof(txid));
             if (txid[0] == 0xff && txid[1] == 0xff) {
                 // No valid txid, forcing bind
                 binding = true;
                 continue;
             }
-            for (int i = 0; i < sizeof(hopData); i++) {
-                hopData[i] = EEPROM.read(addr + 10 + i);
-            }
-            numChans = EEPROM.read(addr + 100);
-            freq_offset = EEPROM.read(addr + 101);
+            eeprom_read_block(hopData, addr+10, sizeof(hopData));
+            numChans = eeprom_read_byte(addr + 100);
+            freq_offset = eeprom_read_byte(addr + 101);
             break;
         } else {
             tuning();
-            int addr = 100;
-            EEPROM.write(addr + 101, freq_offset);
+            eeprom_write_byte(eeprom_addr + 101, freq_offset);
             getBind();
             return;
         }
@@ -368,7 +331,10 @@ void updateRSSI(int rssi_dec) {
         rssi = (((rssi_dec - 256) / 2)) - rssi_offset;
     }
 
-    rssi = constrain(rssi, rssi_min, rssi_max);
+    if (rssi > rssi_max) {
+        rssi = rssi_max;
+    }
+    rssi = rssi < rssi_min ? rssi_min : rssi;
 }
 
 void nextChannel(uint8_t skip) {
@@ -376,13 +342,11 @@ void nextChannel(uint8_t skip) {
     if (chan >= numChans) chan -= numChans;
     cc2500_writeReg(CC2500_CHANNR, hopData[chan]);
     cc2500_writeReg(CC2500_FSCAL3, 0x89);
-    TIMER = T2_9MS;
-    DPRINT("+");
+    DPRINT('+');
 }
 
 int missingPackets = 0;
 int skips = 0;
-unsigned long prev_pkt = 0;
 
 // Sending telemetry currently isn't loud enough on any hardware I've
 // got, but I think it looks something like this (dummy values present
@@ -394,7 +358,7 @@ void sendTelemetry() {
     cc2500_strobe(CC2500_SFRX);
 
     cc2500_writeFifo(telemPkt, sizeof(telemPkt));
-    DPRINT("@");
+    DPRINT('@');
 }
 
 bool getPacket() {
@@ -412,22 +376,23 @@ bool getPacket() {
                     if (ccData[2] == txid[1]) { // second half of TX id
                         nextChannel(1);
                         packet = true;
-                        TIMER = T2_9MS;
+                        TIMER = 0;
                         cc2500_strobe(CC2500_SIDLE);
                     } else {
-                        DPRINT("T");
+                        DPRINT('T');
                     }
                 } else {
-                    DPRINT("N");
+                    DPRINT('N');
                 }
             } else {
-                DPRINT("X");
+                DPRINT('X');
             }
         }
     }
     return packet;
 }
 
+uint8_t seeking = 0;
 void loop() {
     bool packet = false;
     static uint8_t seq = 0;
@@ -438,18 +403,24 @@ void loop() {
     while (!packet) {
         if (timedout) {
             timedout = false;
-            txReady();
             cc2500_strobe(CC2500_SIDLE);
             if (missingPackets > MAX_MISSING_PKT) {
-                nextChannel(SEEK_CHANSKIP);
+                if (seeking == 0) {
+                    nextChannel(SEEK_CHANSKIP);
+                    seeking = 1;
+                    seq = 0;
+                } else if(++seeking > 10) {
+                    nextChannel(1);
+                    seeking = 1;
+                }
                 break;
-            } else {
+            } else if (seeking == 0) {
                 nextChannel(1);
             }
             if (skipNext) {
                 sendTelemetry();
             } else {
-                DPRINT("!");
+                DPRINT('!');
                 missingPackets++;
                 skips++;
             }
@@ -457,7 +428,7 @@ void loop() {
             break;
         }
 
-        if ((millis() - prev_pkt > FAILSAFE_TIME_MS)) {
+        if (failsafe) {
             sumd.setHeader(SUMD_FAILSAFE);
         }
 
@@ -470,8 +441,9 @@ void loop() {
     CS_cc2500_off;
 
     if (packet == true) {
-        DPRINT(".");
-        prev_pkt = millis();
+        wdt_reset();
+        seeking = 0;
+        DPRINT('.');
         if (++seq == 3) {
             seq = 0;
             skipNext = true;
@@ -483,6 +455,7 @@ void loop() {
         }
         loss_histo[offset]++;
 
+        failsafe = false;
         sumd.setHeader(SUMD_VALID);
         sumd.setChannel(0, 0.67*((uint16_t)(ccData[10] & 0x0F) << 8 | ccData[6]));
         sumd.setChannel(1, 0.67*((uint16_t)(ccData[10] & 0xF0) << 4 | ccData[7]));
@@ -494,12 +467,16 @@ void loop() {
         sumd.setChannel(7, 0.67*((uint16_t)(ccData[17] & 0xF0) << 4 | ccData[15]));
 
         packet = false;
-        txReady();
+        tx_sumd = true;
     }
 
     if (tx_sumd) {
         transmitPacket();
     }
+}
+
+static inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 void transmitPacket() {
@@ -514,9 +491,23 @@ void transmitPacket() {
         sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
     }
     #ifndef SER_PRINT_DEBUG
-    #ifndef TINY // TODO:  Need to transmit something from attiny
-    Serial.write(sumd.bytes(), sumd.size());
-    #endif /* TINY */
+    ser_write_block(sumd.bytes(), sumd.size());
     #endif /* SER_PRINT_DEBUG */
     tx_sumd = false;
+}
+
+void ser_write(const uint8_t v) {
+    loop_until_bit_is_set(UCSR0A, UDRE0);
+    UDR0 = v;
+}
+
+void ser_write_block(const uint8_t *v, size_t len) {
+    while(len--) ser_write(*v++);
+}
+
+int main() {
+    setup();
+    for(;;) {
+        loop();
+    }
 }

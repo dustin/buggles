@@ -133,6 +133,14 @@
 #define CC2500_LQI_CRC_OK_BM                   0x80
 #define CC2500_LQI_EST_BM                      0x7F
 
+// End of TI stuff.  Adding local functions.
+
+void cc2500_readFifo(uint8_t *data, int len);
+void cc2500_writeFifo(uint8_t *data, uint8_t len);
+void cc2500_writeReg(uint8_t address, uint8_t data);
+unsigned char cc2500_readReg(unsigned char address);
+void cc2500_strobe(uint8_t address);
+void cc2500_resetChip(void);
 
 /**********************************************************************************/
 #endif
