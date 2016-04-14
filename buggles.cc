@@ -432,6 +432,7 @@ void loop() {
         }
 
         if (failsafe) {
+            rssi = rssi_min;
             sumd.setHeader(SUMD_FAILSAFE);
         }
 
