@@ -63,18 +63,12 @@ volatile bool timedout = false;
 // Set timeout = true every 9ms
 void initTimeoutTimer() {
     cli();
-#ifdef TINY
-    TCCR0A = 0;
-    TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
-    TIMSK |= _BV(TOIE0);              // enable timer overflow interrupt
-#else
-    OCR0A = CPU_SCALE(141);               // compare match register 16MHz/1024/9ms
+    OCR0A = CPU_SCALE(141);           // compare match register 1024/9ms
     OCR0B = 0;
-    TCCR0B |= _BV(WGM02);               // CTC mode
+    TCCR0B |= _BV(WGM02);             // CTC mode
     TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
-    TIMSK0 |= _BV(OCIE1A);              // enable timer compare interrupt
+    TIMRSK |= _BV(OCIE0A);            // enable timer compare interrupt
     TIMER = 0;
-#endif
 
     // The watchdog timer is used for detecting failsafe state.
     wdt_reset();
