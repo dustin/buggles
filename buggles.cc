@@ -4,9 +4,9 @@
 #include <avr/wdt.h>
 #include <util/delay.h>
 #include "config.h"
-#include <util/setbaud.h>
 #include "SUMD.h"
 #include "cc2500.h"
+#include "serial.h"
 
 #include "tinyspi.h"
 
@@ -55,26 +55,6 @@ int loss_histo[NUM_BUCKETS];
 #define NUM_CHAN 8
 #define SUMD_RSSI_CHAN NUM_CHAN
 SUMD sumd(SUMD_RSSI_CHAN + 1 + MORE_CHAN);
-
-void ser_write(const uint8_t v);
-void ser_write_block(const uint8_t *v, size_t len);
-
-void initSerial() {
-    DDRD |= _BV(PD1);
-	DDRD &= ~_BV(PD0);
-
-    UBRR0H = UBRRH_VALUE;
-    UBRR0L = UBRRL_VALUE;
-
-#if USE_2X
-    UCSR0A |= _BV(U2X0);
-#else
-    UCSR0A &= ~(_BV(U2X0));
-#endif
-
-    UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */
-    UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */
-}
 
 volatile bool tx_sumd = false;
 volatile bool failsafe = false;
@@ -224,12 +204,14 @@ void getBind() {
 }
 
 unsigned char bindJumper(void) {
+    #ifndef TINY
     DDRC &= ~(_BV(PIN0));
     PORTC |= _BV(PIN0);
     if (PINC & _BV(PIN0) == 0) {
         _delay_us(1);
         return 1;
     }
+    #endif
     return  0;
 }
 
@@ -456,15 +438,6 @@ void loop() {
     if (tx_sumd) {
         transmitPacket();
     }
-}
-
-void ser_write(const uint8_t v) {
-    loop_until_bit_is_set(UCSR0A, UDRE0);
-    UDR0 = v;
-}
-
-void ser_write_block(const uint8_t *v, size_t len) {
-    while(len--) ser_write(*v++);
 }
 
 void initRadio() {

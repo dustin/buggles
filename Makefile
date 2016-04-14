@@ -14,13 +14,15 @@ buggles.hex: buggles.elf
 	${OBJCOPY} -O ihex -R .eeprom buggles.elf buggles.hex
 	$(SIZE) --format=avr --mcu=$(MCU) buggles.elf
 
-buggles.elf: buggles.o cc2500.o tinyspi.o
-	${CXX} $(CXXFLAGS) -o buggles.elf buggles.o cc2500.o tinyspi.o
+buggles.elf: buggles.o cc2500.o tinyspi.o serial.o
+	${CXX} $(CXXFLAGS) -o buggles.elf buggles.o cc2500.o tinyspi.o serial.o
 
-buggles.o: config.h cc2500.h sumd.h tinyspi.h
+buggles.o: config.h cc2500.h sumd.h tinyspi.h serial.h
+
+serial.o: config.h serial.h serial.c
 
 clean:
-	rm buggles.{elf,hex,o} cc2500.o tinyspi.o
+	rm buggles.{elf,hex,o} cc2500.o tinyspi.o serial.o
 
 install: buggles.hex
 	# avrdude -F -V -c usbtiny -p m328p -U flash:w:buggles.hex
