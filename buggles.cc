@@ -454,7 +454,6 @@ int main() {
     SPI.begin();
 
     initSerial();
-    ser_write('#');
 
     for (int i = 0; i < NUM_BUCKETS; i++) {
         loss_histo[i] = 0;
