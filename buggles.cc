@@ -381,6 +381,7 @@ void loop() {
                 DPRINT('!');
                 missingPackets++;
                 skips++;
+                seq = 0;
             }
             skipNext = false;
             break;
