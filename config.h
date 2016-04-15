@@ -74,7 +74,7 @@
      // Detect data on dedicated pin
 #    define DATA_PRESENT ((PIND & _BV(PIN3)) == _BV(PIN3))
 #  else
-     // Detect data on SCK
+     // Detect data on MISO
 #    define DATA_PRESENT ((PINB & _BV(PIN4)) == _BV(PIN4))
 #  endif
 #endif
