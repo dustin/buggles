@@ -45,21 +45,22 @@
 #define TIMER TCNT0
 
 #if F_CPU == 16000000
+#  define TMR_9MS 141
 #  define CPU_SCALE(a) (a)
 #elif F_CPU == 8000000
-#  error wtf
-#  define CPU_SCALE(a) (a * 2)
+#  define TMR_9MS 71
+#  define CPU_SCALE(a) (a / 2)
 #else
 #  error // 8 or 16MHz only !
 #endif
 
 #ifdef TINY
-#  define SET_GDO (DDRB &= ~(_BV(PIN3)))
+#  define SET_GDO (DDRB &= ~(_BV(PB3)))
 #  define CS 4
-#  define SET_CS (DDRB |= _BV(PIN4))
-#  define CS_cc2500_on   (PORTB |= _BV(PIN4))
-#  define CS_cc2500_off  (PORTB &= ~(_BV(PIN4)))
-#  define DATA_PRESENT   ((PINB & _BV(PIN3)) == _BV(PIN3))
+#  define SET_CS (DDRB |= _BV(PB4))
+#  define CS_cc2500_on   (PORTB |= _BV(PB4))
+#  define CS_cc2500_off  (PORTB &= ~(_BV(PB4)))
+#  define DATA_PRESENT   ((PINB & _BV(PB0)) == _BV(PB0))
 #  define WD_CONTROL WDTCR
 #  define TIMRSK TIMSK
 #else

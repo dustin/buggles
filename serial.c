@@ -9,7 +9,8 @@
 
 void initSerial() {
 #ifdef TINY
-    // No init necessary since the lib jiggles it
+    DDRB |= _BV(PB3);
+    PORTB |= _BV(PB3);
 #else
     DDRD |= _BV(PD1);
 	DDRD &= ~_BV(PD0);

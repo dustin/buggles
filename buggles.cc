@@ -63,7 +63,7 @@ volatile bool timedout = false;
 // Set timeout = true every 9ms
 void initTimeoutTimer() {
     cli();
-    OCR0A = CPU_SCALE(141);           // compare match register 1024/9ms
+    OCR0A = TMR_9MS;
     OCR0B = 0;
     TCCR0B |= _BV(WGM02);             // CTC mode
     TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler

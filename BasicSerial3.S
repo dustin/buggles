@@ -10,8 +10,8 @@
 #include <avr/io.h>
 ; correct for avr/io.h 0x20 port offset for io instructions
 #define UART_Port (PORTB-0x20)
-#define UART_Tx 5
-#define UART_Rx 5
+#define UART_Tx 3
+#define UART_Rx 3
 
 ; Supports using only one pin on the AVR for both Tx and Rx
 ;              D1
