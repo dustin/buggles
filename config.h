@@ -61,7 +61,6 @@
 #  define CS_cc2500_on   (PORTB |= _BV(PB4))
 #  define CS_cc2500_off  (PORTB &= ~(_BV(PB4)))
 #  define DATA_PRESENT   ((PINB & _BV(PB0)) == _BV(PB0))
-#  define WD_CONTROL WDTCR
 #  define TIMRSK TIMSK
 #else
 #  define SET_GDO (DDRD &= ~(_BV(PIN4)))
@@ -69,7 +68,6 @@
 #  define SET_CS (DDRD |= _BV(PIN2))
 #  define CS_cc2500_on  (PORTD  |= _BV(PIN2))
 #  define CS_cc2500_off (PORTD  &= ~(_BV(PIN2)))
-#  define WD_CONTROL WDTCSR
 #  define TIMRSK TIMSK0
 #  ifdef USE_GDO_0
      // Detect data on dedicated pin

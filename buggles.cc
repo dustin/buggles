@@ -72,9 +72,9 @@ void initTimeoutTimer() {
 
     // The watchdog timer is used for detecting failsafe state.
     wdt_reset();
-    WD_CONTROL = _BV(WDCE) | _BV(WDE);
+    _WD_CONTROL_REG = _BV(_WD_CHANGE_BIT) | _BV(WDE);
     // Enable WDT Interrupt, and Set Timeout to ~1 seconds,
-	WD_CONTROL = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+	_WD_CONTROL_REG = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
 
     sei();
 }
