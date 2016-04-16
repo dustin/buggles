@@ -44,15 +44,7 @@
 
 #define TIMER TCNT0
 
-#if F_CPU == 16000000
-#  define TMR_9MS 141
-#  define CPU_SCALE(a) (a)
-#elif F_CPU == 8000000
-#  define TMR_9MS 71
-#  define CPU_SCALE(a) (a / 2)
-#else
-#  error // 8 or 16MHz only !
-#endif
+#define TICKS_MS(ms, scale) ((F_CPU / 1000 / scale) * ms)
 
 #ifdef TINY
 #  define SET_GDO (DDRB &= ~(_BV(PB3)))
