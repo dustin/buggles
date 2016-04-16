@@ -63,7 +63,7 @@ volatile bool timedout = false;
 // Set timeout = true and tx_sumd = true if it's been a bit over 9ms.
 void initTimeoutTimer() {
     cli();
-    OCR0A = TICKS_MS(9.6, 1024);
+    OCR0A = TMR_9ish;
     OCR0B = 0;
     TCCR0B |= _BV(WGM02);             // CTC mode
     TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
