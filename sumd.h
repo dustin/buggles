@@ -4,9 +4,11 @@
  */
 #define SUMD_VALID 0x01
 #define SUMD_FAILSAFE 0x81
-#define CRC_POLYNOME 0x1021
 
 #include <stdlib.h>
+#include <util/crc16.h>
+
+#define CRC16 _crc_xmodem_update
 
 class SUMD {
 public:
@@ -55,7 +57,7 @@ public:
 
     // The address of the buffer to transmit as a SUMD packet.
     const uint8_t* bytes() {
-        computeCRC();
+        computeCRC16();
         return data;
     }
 
@@ -73,19 +75,7 @@ private:
         return 3 + (ch*2);
     }
 
-    uint16_t CRC16(uint16_t crc, uint8_t value) {
-        crc = crc ^ (int16_t)value<<8;
-        for(uint8_t i=0; i<8; i++) {
-            if (crc & 0x8000) {
-                crc = (crc << 1) ^ CRC_POLYNOME;
-            } else {
-                crc = (crc << 1);
-            }
-        }
-        return crc;
-    }
-
-    void computeCRC() {
+    void computeCRC16() {
         uint8_t off = chanOffset(0);
         uint16_t crc = headercrc;
         for (int i = 0; i < nchan(); i++) {
