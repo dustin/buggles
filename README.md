@@ -47,14 +47,10 @@ that, I need a software implementation of SPI (which is silly on
 hardware that does SPI) and SoftSerial.  Neither should be a huge
 challenge.
 
-I could probably also do an ATTiny85 variant.  It is currently using
-two timers, but that's not strictly necessary.
-
-On the topic of timers, I did vary (optionally) from the SUMD spec in
-such a way as to transmit packets approximately every 9ms instead of
-every 10.  This allows me to deliver values to your flight controller
-immediately upon receiving them over the radio for the lowest latency
-possible.
+I did vary slightly from the SUMD spec in such a way as to transmit
+packets approximately every 9ms instead of every 10.  This allows me
+to deliver values to your flight controller immediately upon receiving
+them over the radio for the lowest latency possible.
 
 Example:
 
@@ -69,6 +65,31 @@ of the radio, one channel of RSSI, and then 10 debug channels
 reporting a histogram of packet loss during a test.  Non-debug builds
 will produce smaller packets, but in any case, the latency is the
 same.  About every 9ms, you'll have fresh data.
+
+# Wiring
+
+Wiring is configurable in config.h (as much as anything is
+configurable in such ways), but we are using hardware SPI and (at
+least where we have them) hardware UART, so those are kind of fixed.
+
+Below is what I've been testing with on my bench with the CC2500 using
+GD1 for indicating data presence (on MISO).
+
+## Atmega328p
+
+* SCK -> radio SCK
+* MISO -> radio MISO
+* MOSI -> radio MOSI
+* PD2 -> radio CSn
+* TXD -> FC (SUMD comes out of here)
+
+## ATTiny85
+
+* SCK -> radio SCK
+* DO -> radio MOSI
+* DI -> radio MISO
+* PB2 -> radio CSn
+* PB3 -> FC (SUMD comes out of here)
 
 [frsky]: http://www.frsky-rc.com/
 [airwolf]: http://www.banggood.com/DIY-FRSKY-8CH-Receiver-RX-PPM-Output-For-X9DPLUS-XJT-DJT-DFT-DHT-p-987247.html
