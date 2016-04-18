@@ -43,8 +43,10 @@ uint8_t ccData[27];
 int rssi;
 uint8_t chan;
 
+#ifdef DEBUG
 #define NUM_BUCKETS 10
 int loss_histo[NUM_BUCKETS];
+#endif /* DEBUG */
 
 #ifdef DEBUG
 #define MORE_CHAN NUM_BUCKETS
@@ -331,6 +333,7 @@ static inline long map(long x, long in_min, long in_max, long out_min, long out_
 void transmitPacket() {
     sumd.setChannel(SUMD_RSSI_CHAN, map(rssi, rssi_min, rssi_max, 1000, 2000));
 
+#ifdef DEBUG
     // zero out any histo that exceeds 1000 packets, making the output
     // calculation much more simple.
     for (int i = 0; i < MORE_CHAN; i++) {
@@ -339,6 +342,8 @@ void transmitPacket() {
         }
         sumd.setChannel(SUMD_RSSI_CHAN+1+i, loss_histo[i] + 1000);
     }
+#endif /* DEBUG*/
+
     #ifndef SER_PRINT_DEBUG
     ser_write_block(sumd.bytes(), sumd.size());
     #endif /* SER_PRINT_DEBUG */
@@ -406,12 +411,14 @@ void loop() {
             seq = 0;
             skipNext = true;
         }
+        #ifdef DEBUG
         int offset = 0;
         while (skips > 0) {
             offset++;
             skips = skips >> 1;
         }
         loss_histo[offset]++;
+        #endif /* DEBUG */
 
         failsafe = false;
         sumd.setHeader(SUMD_VALID);
@@ -454,9 +461,12 @@ int main() {
 
     initSerial();
 
+    #ifdef DEBUG
     for (int i = 0; i < NUM_BUCKETS; i++) {
         loss_histo[i] = 0;
     }
+    #endif /* DEBUG */
+
     for (int i = 0; i < sumd.nchan(); i++) {
         sumd.setChannel(i, 1500);
     }
