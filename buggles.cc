@@ -151,11 +151,10 @@ uint8_t waitFor(uint8_t *data) {
 }
 
 void storeBind() {
-    uint8_t *addr = eeprom_addr;
-    eeprom_write_block(txid, addr, sizeof(txid));
+    eeprom_write_block(txid, eeprom_addr, sizeof(txid));
 
-    eeprom_write_block(hopData, addr+10, sizeof(hopData));
-    eeprom_write_byte(addr + 100, numChans);
+    eeprom_write_block(hopData, eeprom_addr+10, sizeof(hopData));
+    eeprom_write_byte(eeprom_addr + 100, numChans);
 }
 
 void getBind() {
@@ -238,16 +237,15 @@ void bindRadio() {
     bool binding = bindJumper();
     while (1) {
         if (!binding) { //bind complete or no bind
-            uint8_t *addr = eeprom_addr;
-            eeprom_read_block(txid, addr, sizeof(txid));
+            eeprom_read_block(txid, eeprom_addr, sizeof(txid));
             if (txid[0] == 0xff && txid[1] == 0xff) {
                 // No valid txid, forcing bind
                 binding = true;
                 continue;
             }
-            eeprom_read_block(hopData, addr+10, sizeof(hopData));
-            numChans = eeprom_read_byte(addr + 100);
-            freq_offset = eeprom_read_byte(addr + 101);
+            eeprom_read_block(hopData, eeprom_addr+10, sizeof(hopData));
+            numChans = eeprom_read_byte(eeprom_addr + 100);
+            freq_offset = eeprom_read_byte(eeprom_addr + 101);
             break;
         } else {
             tuning();
