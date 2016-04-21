@@ -3,6 +3,7 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <util/delay.h>
+#include <util/atomic.h>
 #include "config.h"
 #include "SUMD.h"
 #include "cc2500.h"
@@ -64,21 +65,20 @@ volatile bool timedout = false;
 
 // Set timeout = true and tx_sumd = true if it's been a bit over 9ms.
 void initTimeoutTimer() {
-    cli();
-    OCR0A = TMR_9ish;
-    OCR0B = 0;
-    TCCR0B |= _BV(WGM02);             // CTC mode
-    TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
-    TIMRSK |= _BV(OCIE0A);            // enable timer compare interrupt
-    TIMER = 0;
+    ATOMIC_BLOCK(ATOMIC_FORECEON) {
+        OCR0A = TMR_9ish;
+        OCR0B = 0;
+        TCCR0B |= _BV(WGM02);             // CTC mode
+        TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
+        TIMRSK |= _BV(OCIE0A);            // enable timer compare interrupt
+        TIMER = 0;
 
-    // The watchdog timer is used for detecting failsafe state.
-    wdt_reset();
-    _WD_CONTROL_REG = _BV(_WD_CHANGE_BIT) | _BV(WDE);
-    // Enable WDT Interrupt, and Set Timeout to ~1 seconds,
-	_WD_CONTROL_REG = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
-
-    sei();
+        // The watchdog timer is used for detecting failsafe state.
+        wdt_reset();
+        _WD_CONTROL_REG = _BV(_WD_CHANGE_BIT) | _BV(WDE);
+        // Enable WDT Interrupt, and Set Timeout to ~1 seconds,
+        _WD_CONTROL_REG = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+    }
 }
 
 ISR(WDT_vect) {
