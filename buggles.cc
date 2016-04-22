@@ -90,9 +90,13 @@ ISR(WDT_vect, ISR_NAKED) {
     reti();
 }
 
-ISR(TIMER0_COMPA_vect) {
-    timedout = true;
-    tx_sumd = true;
+ISR(TIMER0_COMPA_vect, ISR_NAKED) {
+    asm("push r17\n\t"
+        "ldi r17,lo8(1)\n\t"
+        "sts timedout,r17\n\t"
+        "sts tx_sumd,r17\n\t"
+        "pop r17");
+    reti();
 }
 
 void  configureRadio() {
