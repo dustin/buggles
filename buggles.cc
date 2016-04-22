@@ -26,9 +26,9 @@
 // Microseconds between sumd frames
 #define SUMD_FREQ 10000
 
-const int rssi_offset = 71;
-const int rssi_min = -90;
-const int rssi_max = -20;
+const uint8_t rssi_offset = 71;
+const int8_t rssi_min = -90;
+const int8_t rssi_max = -20;
 
 #define MAX_CHANS 60
 
@@ -41,7 +41,7 @@ int freq_offset;
 uint8_t hopData[MAX_CHANS];
 uint8_t numChans;
 uint8_t ccData[27];
-int rssi;
+int8_t rssi;
 uint8_t chan;
 
 #ifdef DEBUG
@@ -258,11 +258,11 @@ void bindRadio() {
     }
 }
 
-void updateRSSI(int rssi_dec) {
+void updateRSSI(uint8_t rssi_dec) {
     if (rssi_dec < 128) {
         rssi = ((rssi_dec / 2) - rssi_offset);
     } else {
-        rssi = (((rssi_dec - 256) / 2)) - rssi_offset;
+        rssi = (int16_t)((int16_t)(rssi_dec - 256) / 2) - rssi_offset;
     }
 
     if (rssi > rssi_max) {
