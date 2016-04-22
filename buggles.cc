@@ -68,16 +68,16 @@ void initTimeoutTimer() {
     ATOMIC_BLOCK(ATOMIC_FORCEON) {
         OCR0A = TMR_9ish;
         OCR0B = 0;
-        TCCR0B |= _BV(WGM02);             // CTC mode
-        TCCR0B |= _BV(CS02) | _BV(CS00);  // 1024 prescaler
-        TIMRSK |= _BV(OCIE0A);            // enable timer compare interrupt
+        TCCR0B |= _BV(WGM02) |        // CTC mode
+            _BV(CS02) | _BV(CS00);    // 1024 prescaler
+        TIMRSK |= _BV(OCIE0A);        // enable timer compare interrupt
         TIMER = 0;
 
         // The watchdog timer is used for detecting failsafe state.
         wdt_reset();
-        _WD_CONTROL_REG = _BV(_WD_CHANGE_BIT) | _BV(WDE);
+        _WD_CONTROL_REG = _BV(_WD_CHANGE_BIT) | _BV(WDE) |
         // Enable WDT Interrupt, and Set Timeout to ~1 seconds,
-        _WD_CONTROL_REG = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+            _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
     }
 }
 
