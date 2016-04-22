@@ -81,9 +81,13 @@ void initTimeoutTimer() {
     }
 }
 
-ISR(WDT_vect) {
+ISR(WDT_vect, ISR_NAKED) {
     wdt_reset();
-    failsafe = true;
+    asm("push r17\n\t"
+        "ldi r17,lo8(1)\n\t"
+        "sts failsafe,r17\n\t"
+        "pop r17");
+    reti();
 }
 
 ISR(TIMER0_COMPA_vect) {
