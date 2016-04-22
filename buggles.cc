@@ -65,7 +65,7 @@ volatile bool timedout = false;
 
 // Set timeout = true and tx_sumd = true if it's been a bit over 9ms.
 void initTimeoutTimer() {
-    ATOMIC_BLOCK(ATOMIC_FORECEON) {
+    ATOMIC_BLOCK(ATOMIC_FORCEON) {
         OCR0A = TMR_9ish;
         OCR0B = 0;
         TCCR0B |= _BV(WGM02);             // CTC mode
